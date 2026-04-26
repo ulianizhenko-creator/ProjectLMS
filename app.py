@@ -5,10 +5,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 import random
 import requests
-import json
-import os
-from models import db, User, QuizResult, Question
-from utils import *
+import csv
+from models import db, User, QuizResult
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'super-secret-key-for-travel-quiz-2024'
@@ -19,27 +17,49 @@ db.init_app(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
+
+# ===== ФУНКЦИЯ ЗАГРУЗКИ ВОПРОСОВ (ИСПРАВЛЕНА) =====
+def load_questions_from_csv(file_path):
+    """Загрузка вопросов из CSV-файла с сохранением правильных ответов"""
+    questions = []
+    try:
+        with open(file_path, 'r', encoding='utf-8') as file:
+            reader = csv.DictReader(file)
+            for idx, row in enumerate(reader):
+                # ВАЖНО: correct переводим из 1-4 в 0-3 для Python
+                correct_index = int(row['correct']) - 1
+                questions.append({
+                    'id': idx,
+                    'question': row['question'],
+                    'options': [row['opt1'], row['opt2'], row['opt3'], row['opt4']],
+                    'correct': correct_index,
+                    'category': row.get('category', 'Общая'),
+                    'difficulty': row.get('difficulty', 'medium')
+                })
+    except FileNotFoundError:
+        print("Файл с вопросами не найден!")
+        return []
+    return questions
+
+
 # Глобальные вопросы
 QUESTIONS = load_questions_from_csv('quiz_data.csv')
-QUESTIONS_PER_GAME = 25  # Все вопросы из викторины
+QUESTIONS_PER_GAME = 25
+
+
+# ===== НОВАЯ ФУНКЦИЯ ДЛЯ ПЕРЕМЕШИВАНИЯ =====
+def shuffle_questions_preserve_answers(questions_list):
+    """
+    Перемешивает вопросы, но правильные ответы остаются привязанными к своим вопросам
+    """
+    shuffled = questions_list.copy()
+    random.shuffle(shuffled)
+    return shuffled
 
 
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
-
-
-def get_fun_fact():
-    """Получение интересного факта о путешествиях (API)"""
-    try:
-        # Используем REST API с фактами
-        response = requests.get("https://uselessfacts.jsph.pl/api/v2/facts/random?language=en", timeout=5)
-        if response.status_code == 200:
-            fact = response.json().get('text', '')
-            return f"✈️ Интересный факт: {fact[:150]}"
-    except:
-        pass
-    return "🌍 Путешествия расширяют кругозор и делают нас счастливее!"
 
 
 @app.route('/')
@@ -52,14 +72,13 @@ def register():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
-        email = request.form.get('email', '')
 
         if User.query.filter_by(username=username).first():
             flash('Пользователь уже существует!', 'danger')
             return redirect(url_for('register'))
 
         hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
-        new_user = User(username=username, password=hashed_password, email=email)
+        new_user = User(username=username, password=hashed_password)
         db.session.add(new_user)
         db.session.commit()
 
@@ -78,16 +97,21 @@ def login():
         user = User.query.filter_by(username=username).first()
         if user and check_password_hash(user.password, password):
             login_user(user)
+
+            # ===== ИСПРАВЛЕНО: Правильное перемешивание =====
+            available_questions = QUESTIONS.copy() if len(QUESTIONS) >= QUESTIONS_PER_GAME else QUESTIONS
+
+            # Перемешиваем вопросы (каждый вопрос сохраняет свой правильный ответ)
+            shuffled_questions = shuffle_questions_preserve_answers(available_questions)
+
+            # Берем нужное количество вопросов после перемешивания
+            selected_questions = shuffled_questions[:QUESTIONS_PER_GAME]
+
             session['score'] = 0
             session['current_question'] = 0
-            session['answers'] = []
-            session['start_time'] = datetime.now().isoformat()
-
-            # Перемешиваем вопросы
-            available_questions = QUESTIONS.copy() if len(QUESTIONS) >= QUESTIONS_PER_GAME else QUESTIONS
-            selected_questions = random.sample(available_questions, min(QUESTIONS_PER_GAME, len(available_questions)))
             session['questions'] = selected_questions
             session['total_questions'] = len(selected_questions)
+            session['answers_log'] = []
 
             flash(f'Добро пожаловать, {username}!', 'success')
             return redirect(url_for('quiz'))
@@ -120,19 +144,32 @@ def quiz():
 
     if request.method == 'POST':
         selected_answer = int(request.form['answer'])
-        correct_answer = questions[current_q]['correct']
+
+        # Получаем правильный ответ из текущего вопроса
+        current_question_data = questions[current_q]
+        correct_answer = current_question_data['correct']
         is_correct = (selected_answer == correct_answer)
+
+        # Отладка в консоль
+        print(f"\n{'=' * 50}")
+        print(f"Вопрос {current_q + 1}: {current_question_data['question']}")
+        print(f"Правильный ответ: {current_question_data['options'][correct_answer]}")
+        print(f"Ответ пользователя: {current_question_data['options'][selected_answer]}")
+        print(f"Результат: {'✅ ВЕРНО' if is_correct else '❌ НЕВЕРНО'}")
+        print(f"{'=' * 50}\n")
 
         if is_correct:
             session['score'] = session.get('score', 0) + 1
 
-        # Сохраняем ответ
-        if 'answers' not in session:
-            session['answers'] = []
-        session['answers'].append({
-            'question': questions[current_q]['question'],
-            'selected': selected_answer,
-            'correct': correct_answer,
+        # Сохраняем детальный лог
+        if 'answers_log' not in session:
+            session['answers_log'] = []
+
+        session['answers_log'].append({
+            'question_num': current_q + 1,
+            'question_text': current_question_data['question'],
+            'selected_answer_text': current_question_data['options'][selected_answer],
+            'correct_answer_text': current_question_data['options'][correct_answer],
             'is_correct': is_correct
         })
 
@@ -148,9 +185,7 @@ def quiz():
                            options=question_data['options'],
                            question_num=current_q + 1,
                            total=len(questions),
-                           progress=progress,
-                           category=question_data.get('category', 'Общая'),
-                           difficulty=question_data.get('difficulty', 'medium'))
+                           progress=progress)
 
 
 @app.route('/result')
@@ -159,7 +194,16 @@ def result():
     score = session.get('score', 0)
     total = session.get('total_questions', len(session.get('questions', [])))
     percentage = (score / total * 100) if total > 0 else 0
-    rank = calculate_rank(percentage)
+
+    # Определяем ранг
+    if percentage >= 90:
+        rank = "🏆 Эксперт-путешественник"
+    elif percentage >= 70:
+        rank = "⭐ Опытный турист"
+    elif percentage >= 50:
+        rank = "🌍 Любознательный путешественник"
+    else:
+        rank = "📚 Начинающий турист"
 
     # Сохраняем результат в БД
     quiz_result = QuizResult(
@@ -178,33 +222,27 @@ def result():
     db.session.commit()
 
     # Сохраняем в текстовый файл
-    save_stat_to_file(current_user.username, score, total, round(percentage, 1))
+    with open('statistics.txt', 'a', encoding='utf-8') as f:
+        f.write(
+            f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - {current_user.username}: {score}/{total} ({percentage:.1f}%)\n")
 
-    # Получаем интересный факт
-    fun_fact = get_fun_fact()
-
-    # Получаем погоду в популярном туристическом городе
+    # Интересный факт через API
     try:
-        weather_api = "https://api.open-meteo.com/v1/forecast?latitude=48.8566&longitude=2.3522&current_weather=true"
-        weather_data = requests.get(weather_api, timeout=3).json()
-        temperature = weather_data['current_weather']['temperature']
-        weather_info = f"Погода в Париже сейчас: {temperature}°C"
+        response = requests.get("https://uselessfacts.jsph.pl/api/v2/facts/random?language=en", timeout=5)
+        if response.status_code == 200:
+            fun_fact = response.json().get('text', '')
+            fun_fact = f"✈️ {fun_fact[:150]}"
+        else:
+            fun_fact = "🌍 Путешествия расширяют кругозор!"
     except:
-        weather_info = "Загрузите погоду позже"
+        fun_fact = "🌍 Путешествия расширяют кругозор!"
 
-    # Лучшие результаты пользователя
+    # Лучшие результаты
     best_results = QuizResult.query.filter_by(user_id=current_user.id) \
         .order_by(QuizResult.score.desc()) \
         .limit(5).all()
 
-    # Очищаем сессию, но сохраняем статистику для отображения
-    session_data = {
-        'score': score,
-        'total': total,
-        'percentage': round(percentage, 1),
-        'rank': rank,
-        'answers': session.get('answers', [])
-    }
+    answers_log = session.get('answers_log', [])
 
     return render_template('result.html',
                            score=score,
@@ -212,20 +250,17 @@ def result():
                            percentage=round(percentage, 1),
                            rank=rank,
                            fun_fact=fun_fact,
-                           weather=weather_info,
                            best_results=best_results,
-                           answers=session_data['answers'])
+                           answers=answers_log)
 
 
 @app.route('/profile')
 @login_required
 def profile():
-    # Статистика пользователя
     total_games = current_user.total_games
     best_score = current_user.best_score
-    avg_score = current_user.get_average_score()
+    avg_score = current_user.get_average_score() if hasattr(current_user, 'get_average_score') else 0
 
-    # История игр
     recent_results = QuizResult.query.filter_by(user_id=current_user.id) \
         .order_by(QuizResult.date_played.desc()) \
         .limit(10).all()
@@ -240,7 +275,6 @@ def profile():
 
 @app.route('/leaderboard')
 def leaderboard():
-    # Топ-10 игроков по лучшим результатам
     top_players = db.session.query(User.username, User.best_score, User.total_games) \
         .order_by(User.best_score.desc()) \
         .limit(10).all()
@@ -248,39 +282,12 @@ def leaderboard():
     return render_template('leaderboard.html', top_players=top_players)
 
 
-@app.route('/api/statistics')
-@login_required
-def api_statistics():
-    """REST API для получения статистики"""
-    results = QuizResult.query.filter_by(user_id=current_user.id).all()
-    stats = calculate_statistics(results)
-
-    return jsonify({
-        'username': current_user.username,
-        'statistics': stats,
-        'total_games': current_user.total_games,
-        'best_score': current_user.best_score,
-        'average_score': current_user.get_average_score()
-    })
-
-
-@app.route('/reset_progress', methods=['POST'])
-@login_required
-def reset_progress():
-    """Сброс прогресса пользователя"""
-    QuizResult.query.filter_by(user_id=current_user.id).delete()
-    current_user.total_games = 0
-    current_user.total_score = 0
-    current_user.best_score = 0
-    db.session.commit()
-
-    flash('Ваш прогресс был сброшен!', 'warning')
-    return redirect(url_for('profile'))
-
-
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
-        print(f"Загружено вопросов: {len(QUESTIONS)}")
-        print("Сервер запущен на http://127.0.0.1:5000")
+        print(f"\n{'=' * 50}")
+        print(f"✅ СЕРВЕР ЗАПУЩЕН")
+        print(f"📚 Загружено вопросов: {len(QUESTIONS)}")
+        print(f"🌐 Адрес: http://127.0.0.1:5000")
+        print(f"{'=' * 50}\n")
     app.run(debug=True)

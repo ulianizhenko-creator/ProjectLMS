@@ -22,10 +22,6 @@
                     {{ fun_fact }}
                 </div>
 
-                <div class="alert alert-warning">
-                    {{ weather }}
-                </div>
-
                 {% if best_results %}
                 <div class="mt-4">
                     <h5>🏆 Ваши лучшие результаты:</h5>
@@ -34,6 +30,35 @@
                         <li class="list-group-item">{{ result.score }}/{{ result.total_questions }} ({{ (result.percentage or 0)|round }}%)</li>
                         {% endfor %}
                     </ul>
+                </div>
+                {% endif %}
+
+                <!-- Детальный разбор ответов -->
+                {% if answers %}
+                <div class="mt-4">
+                    <h5>📋 Детальный разбор ответов:</h5>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>№</th>
+                                    <th>Вопрос</th>
+                                    <th>Ваш ответ</th>
+                                    <th>Результат</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for answer in answers %}
+                                <tr class="{% if answer.is_correct %}table-success{% else %}table-danger{% endif %}">
+                                    <td>{{ answer.question_num }}</td>
+                                    <td>{{ answer.question_text[:60] }}{% if answer.question_text|length > 60 %}...{% endif %}</td>
+                                    <td>{{ answer.selected_answer_text }}</td>
+                                    <td>{% if answer.is_correct %}✅{% else %}❌ ({{ answer.correct_answer_text }}){% endif %}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
                 {% endif %}
 

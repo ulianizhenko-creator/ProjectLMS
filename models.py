@@ -16,6 +16,7 @@ class User(UserMixin, db.Model):
     best_score = db.Column(db.Integer, default=0)
 
     def get_average_score(self):
+        """Расчет среднего балла"""
         if self.total_games > 0:
             return round(self.total_score / self.total_games, 2)
         return 0
@@ -30,15 +31,3 @@ class QuizResult(db.Model):
     date_played = db.Column(db.DateTime, default=datetime.utcnow)
 
     user = db.relationship('User', backref=db.backref('results', lazy=True))
-
-
-class Question(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    question_text = db.Column(db.String(500), nullable=False)
-    option1 = db.Column(db.String(200), nullable=False)
-    option2 = db.Column(db.String(200), nullable=False)
-    option3 = db.Column(db.String(200), nullable=False)
-    option4 = db.Column(db.String(200), nullable=False)
-    correct_answer = db.Column(db.Integer, nullable=False)
-    category = db.Column(db.String(100), nullable=True)
-    difficulty = db.Column(db.String(20), default="medium")
