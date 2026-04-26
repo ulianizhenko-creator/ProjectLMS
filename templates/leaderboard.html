@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow">
+            <div class="card-header bg-warning text-dark">
+                <h3 class="text-center">🏆 Таблица лидеров</h3>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Игрок</th>
+                                <th>Лучший результат</th>
+                                <th>Всего игр</th>
+                                <th>Ранг</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for player in top_players %}
+                            <tr>
+                                <td>{{ loop.index }}</td>
+                                <td>
+                                    {% if loop.index == 1 %}👑 {% endif %}
+                                    {{ player.username }}
+                                </td>
+                                <td><strong>{{ player.best_score }}</strong></td>
+                                <td>{{ player.total_games }}</td>
+                                <td>
+                                    {# ИСПРАВЛЕНО: встроенная логика вместо calculate_rank() #}
+                                    {% set percentage = (player.best_score / 25 * 100) if player.best_score and player.best_score > 0 else 0 %}
+                                    {% if percentage >= 90 %}🥇 Мастер
+                                    {% elif percentage >= 70 %}🥈 Эксперт
+                                    {% elif percentage >= 50 %}🥉 Новичок
+                                    {% else %}📚 Ученик
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

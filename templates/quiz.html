@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow">
+            <div class="card-header bg-info text-white">
+                <div class="d-flex justify-content-between">
+                    <span>Вопрос {{ question_num }} из {{ total }}</span>
+                    <span>
+                        {% if category and category != 'Общая' %}
+                        📁 {{ category }}
+                        {% endif %}
+                        {% if difficulty == 'easy' %}🟢 Лёгкий
+                        {% elif difficulty == 'hard' %}🔴 Сложный
+                        {% else %}🟡 Средний
+                        {% endif %}
+                    </span>
+                </div>
+                <div class="progress mt-2">
+                    <div class="progress-bar" style="width: {{ progress }}%">{{ progress }}%</div>
+                </div>
+            </div>
+            <div class="card-body">
+                <h5 class="card-title mb-4">{{ question }}</h5>
+                <form method="POST">
+                    {# ИСПРАВЛЕНО: используем loop.index0 вместо enumerate() #}
+                    {% for option in options %}
+                    <div class="form-check mb-3 p-3 border rounded hover-shadow">
+                        <input class="form-check-input" type="radio" name="answer" value="{{ loop.index0 }}" id="opt{{ loop.index0 }}" required>
+                        <label class="form-check-label ms-2" for="opt{{ loop.index0 }}" style="font-size: 1.1rem;">
+                            {{ option }}
+                        </label>
+                    </div>
+                    {% endfor %}
+                    <button type="submit" class="btn btn-primary btn-lg w-100 mt-3">Ответить →</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
