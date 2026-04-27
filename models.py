@@ -16,7 +16,6 @@ class User(UserMixin, db.Model):
     best_score = db.Column(db.Integer, default=0)
 
     def get_average_score(self):
-        """Расчет среднего балла"""
         if self.total_games > 0:
             return round(self.total_score / self.total_games, 2)
         return 0

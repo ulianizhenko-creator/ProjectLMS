@@ -19,9 +19,7 @@ login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
 
-# ===== ФУНКЦИЯ ЗАГРУЗКИ ВОПРОСОВ (ИСПРАВЛЕНА) =====
 def load_questions_from_csv(file_path):
-    """Загрузка вопросов из CSV-файла с сохранением правильных ответов"""
     questions = []
     try:
         with open(file_path, 'r', encoding='utf-8') as file:
@@ -43,16 +41,11 @@ def load_questions_from_csv(file_path):
     return questions
 
 
-# Глобальные вопросы
 QUESTIONS = load_questions_from_csv('quiz_data.csv')
 QUESTIONS_PER_GAME = 25
 
 
-# ===== НОВАЯ ФУНКЦИЯ ДЛЯ ПЕРЕМЕШИВАНИЯ =====
 def shuffle_questions_preserve_answers(questions_list):
-    """
-    Перемешивает вопросы, но правильные ответы остаются привязанными к своим вопросам
-    """
     shuffled = questions_list.copy()
     random.shuffle(shuffled)
     return shuffled
@@ -101,13 +94,10 @@ def login():
 
             available_questions = QUESTIONS.copy() if len(QUESTIONS) >= QUESTIONS_PER_GAME else QUESTIONS
 
-            # Перемешиваем вопросы
             shuffled_questions = shuffle_questions_preserve_answers(available_questions)
 
-            # Берём нужное количество вопросов
             selected_questions = shuffled_questions[:QUESTIONS_PER_GAME]
 
-            # ===== НОВОЕ: перемешиваем варианты ответов внутри каждого вопроса =====
             selected_questions = shuffle_all_options(selected_questions)
 
             session['score'] = 0
@@ -116,7 +106,6 @@ def login():
             session['total_questions'] = len(selected_questions)
             session['answers_log'] = []
 
-            # Отладка: выводим правильные ответы после перемешивания
             for i, q in enumerate(selected_questions[:3]):
                 print(f"Вопрос {i + 1}: правильный ответ теперь - {q['options'][q['correct']]}")
 
@@ -152,12 +141,10 @@ def quiz():
     if request.method == 'POST':
         selected_answer = int(request.form['answer'])
 
-        # Получаем правильный ответ из текущего вопроса
         current_question_data = questions[current_q]
         correct_answer = current_question_data['correct']
         is_correct = (selected_answer == correct_answer)
 
-        # Отладка в консоль
         print(f"\n{'=' * 50}")
         print(f"Вопрос {current_q + 1}: {current_question_data['question']}")
         print(f"Правильный ответ: {current_question_data['options'][correct_answer]}")
@@ -168,7 +155,6 @@ def quiz():
         if is_correct:
             session['score'] = session.get('score', 0) + 1
 
-        # Сохраняем детальный лог
         if 'answers_log' not in session:
             session['answers_log'] = []
 
@@ -183,7 +169,6 @@ def quiz():
         session['current_question'] = current_q + 1
         return redirect(url_for('quiz'))
 
-    # GET запрос
     question_data = questions[current_q]
     progress = int((current_q / len(questions)) * 100)
 
@@ -202,7 +187,6 @@ def result():
     total = session.get('total_questions', len(session.get('questions', [])))
     percentage = (score / total * 100) if total > 0 else 0
 
-    # Определяем ранг
     if percentage >= 90:
         rank = "🏆 Эксперт-путешественник"
     elif percentage >= 70:
@@ -212,7 +196,6 @@ def result():
     else:
         rank = "📚 Начинающий турист"
 
-    # Сохраняем результат в БД
     quiz_result = QuizResult(
         user_id=current_user.id,
         score=score,
@@ -221,19 +204,16 @@ def result():
     )
     db.session.add(quiz_result)
 
-    # Обновляем статистику пользователя
     current_user.total_games += 1
     current_user.total_score += score
     if score > current_user.best_score:
         current_user.best_score = score
     db.session.commit()
 
-    # Сохраняем в текстовый файл
     with open('statistics.txt', 'a', encoding='utf-8') as f:
         f.write(
             f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - {current_user.username}: {score}/{total} ({percentage:.1f}%)\n")
 
-    # Интересный факт через API
     try:
         response = requests.get("https://uselessfacts.jsph.pl/api/v2/facts/random?language=en", timeout=5)
         if response.status_code == 200:
@@ -244,7 +224,6 @@ def result():
     except:
         fun_fact = "🌍 Путешествия расширяют кругозор!"
 
-    # Лучшие результаты
     best_results = QuizResult.query.filter_by(user_id=current_user.id) \
         .order_by(QuizResult.score.desc()) \
         .limit(5).all()
