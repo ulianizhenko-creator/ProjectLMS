@@ -6,6 +6,15 @@
             <div class="card-header bg-info text-white">
                 <div class="d-flex justify-content-between">
                     <span>Вопрос {{ question_num }} из {{ total }}</span>
+                    <span>
+                        {% if category and category != 'Общая' %}
+                        📁 {{ category }}
+                        {% endif %}
+                        {% if difficulty == 'easy' %}🟢 Лёгкий
+                        {% elif difficulty == 'hard' %}🔴 Сложный
+                        {% else %}🟡 Средний
+                        {% endif %}
+                    </span>
                 </div>
                 <div class="progress mt-2">
                     <div class="progress-bar" style="width: {{ progress }}%">{{ progress }}%</div>

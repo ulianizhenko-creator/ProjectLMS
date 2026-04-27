@@ -7,6 +7,7 @@ import random
 import requests
 import csv
 from models import db, User, QuizResult
+from utils import load_questions_from_csv, shuffle_questions_preserve_answers, shuffle_all_options
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'super-secret-key-for-travel-quiz-2024'
@@ -26,8 +27,8 @@ def load_questions_from_csv(file_path):
         with open(file_path, 'r', encoding='utf-8') as file:
             reader = csv.DictReader(file)
             for idx, row in enumerate(reader):
-                # ВАЖНО: correct переводим из 1-4 в 0-3 для Python
-                correct_index = int(row['correct']) - 1
+                correct_index = int(row['correct']) - 1  # Преобразуем 1-4 в 0-3
+                print(f"Загружен вопрос {idx+1}: {row['question'][:50]}... правильный индекс: {correct_index} (вариант {row['correct']})")
                 questions.append({
                     'id': idx,
                     'question': row['question'],
@@ -98,20 +99,26 @@ def login():
         if user and check_password_hash(user.password, password):
             login_user(user)
 
-            # ===== ИСПРАВЛЕНО: Правильное перемешивание =====
             available_questions = QUESTIONS.copy() if len(QUESTIONS) >= QUESTIONS_PER_GAME else QUESTIONS
 
-            # Перемешиваем вопросы (каждый вопрос сохраняет свой правильный ответ)
+            # Перемешиваем вопросы
             shuffled_questions = shuffle_questions_preserve_answers(available_questions)
 
-            # Берем нужное количество вопросов после перемешивания
+            # Берём нужное количество вопросов
             selected_questions = shuffled_questions[:QUESTIONS_PER_GAME]
+
+            # ===== НОВОЕ: перемешиваем варианты ответов внутри каждого вопроса =====
+            selected_questions = shuffle_all_options(selected_questions)
 
             session['score'] = 0
             session['current_question'] = 0
             session['questions'] = selected_questions
             session['total_questions'] = len(selected_questions)
             session['answers_log'] = []
+
+            # Отладка: выводим правильные ответы после перемешивания
+            for i, q in enumerate(selected_questions[:3]):
+                print(f"Вопрос {i + 1}: правильный ответ теперь - {q['options'][q['correct']]}")
 
             flash(f'Добро пожаловать, {username}!', 'success')
             return redirect(url_for('quiz'))

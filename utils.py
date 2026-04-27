@@ -1,19 +1,21 @@
 import random
 import csv
-from models import Question
+from datetime import datetime
 
 
 def load_questions_from_csv(file_path):
-    """Загрузка вопросов из CSV-файла"""
+    """Загрузка вопросов из CSV-файла с сохранением правильных ответов"""
     questions = []
     try:
         with open(file_path, 'r', encoding='utf-8') as file:
             reader = csv.DictReader(file)
-            for row in reader:
+            for idx, row in enumerate(reader):
+                correct_index = int(row['correct']) - 1
                 questions.append({
+                    'id': idx,
                     'question': row['question'],
                     'options': [row['opt1'], row['opt2'], row['opt3'], row['opt4']],
-                    'correct': int(row['correct']),
+                    'correct': correct_index,
                     'category': row.get('category', 'Общая'),
                     'difficulty': row.get('difficulty', 'medium')
                 })
@@ -23,8 +25,50 @@ def load_questions_from_csv(file_path):
     return questions
 
 
+def shuffle_questions_preserve_answers(questions_list):
+    """
+    Перемешивает вопросы, но правильные ответы остаются привязанными к своим вопросам
+    """
+    shuffled = questions_list.copy()
+    random.shuffle(shuffled)
+    return shuffled
+
+
+def shuffle_options_in_question(question):
+    """
+    Перемешивает варианты ответов внутри одного вопроса
+    Сохраняет соответствие: правильный ответ перемещается вместе со своим текстом
+    """
+    options = question['options']
+    correct_index = question['correct']
+
+    # Создаём пары (текст варианта, является ли он правильным)
+    paired = [(opt, i == correct_index) for i, opt in enumerate(options)]
+
+    # Перемешиваем пары
+    random.shuffle(paired)
+
+    # Разбираем обратно
+    new_options = [pair[0] for pair in paired]
+    new_correct = [i for i, pair in enumerate(paired) if pair[1]][0]
+
+    question['options'] = new_options
+    question['correct'] = new_correct
+
+    return question
+
+
+def shuffle_all_options(questions_list):
+    """
+    Перемешивает варианты ответов для всех вопросов
+    """
+    for question in questions_list:
+        question = shuffle_options_in_question(question)
+    return questions_list
+
+
 def calculate_statistics(results):
-    """Расчет статистики по результатам"""
+    """Расчёт статистики по результатам игрока"""
     if not results:
         return {'average': 0, 'best': 0, 'total': 0}
 
@@ -38,7 +82,7 @@ def calculate_statistics(results):
 
 
 def get_random_questions(questions, count=10):
-    """Получить случайные вопросы"""
+    """Получить случайные вопросы из списка"""
     if len(questions) <= count:
         return random.sample(questions, len(questions))
     return random.sample(questions, count)
@@ -50,7 +94,7 @@ def get_questions_by_category(questions, category):
 
 
 def format_date(date):
-    """Форматирование даты"""
+    """Форматирование даты для вывода"""
     if date:
         return date.strftime("%d.%m.%Y %H:%M")
     return "Нет данных"
@@ -68,15 +112,3 @@ def calculate_rank(percentage):
         return "📸 Начинающий турист"
     else:
         return "🗺️ Первооткрыватель"
-
-
-def check_answer(selected, correct):
-    """Проверка ответа"""
-    return selected == correct
-
-
-def save_stat_to_file(username, score, total, percentage):
-    """Сохранение статистики в файл"""
-    from datetime import datetime
-    with open('statistics.txt', 'a', encoding='utf-8') as f:
-        f.write(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - {username}: {score}/{total} ({percentage}%)\n")
