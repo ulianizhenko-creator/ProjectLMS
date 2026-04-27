@@ -218,11 +218,45 @@ def result():
         response = requests.get("https://uselessfacts.jsph.pl/api/v2/facts/random?language=en", timeout=5)
         if response.status_code == 200:
             fun_fact = response.json().get('text', '')
-            fun_fact = f"✈️ {fun_fact[:150]}"
+            fun_fact = f"✈️ Интересный факт: {fun_fact[:150]}"
         else:
-            fun_fact = "🌍 Путешествия расширяют кругозор!"
+            fun_fact = "🌍 Путешествия расширяют кругозор и делают нас счастливее!"
     except:
-        fun_fact = "🌍 Путешествия расширяют кругозор!"
+        fun_fact = "🌍 Путешествия расширяют кругозор и делают нас счастливее!"
+
+    try:
+        weather_api = "https://api.open-meteo.com/v1/forecast?latitude=51.5333&longitude=46.0333&current_weather=true&timezone=Europe/Moscow"
+        weather_response = requests.get(weather_api, timeout=5)
+
+        if weather_response.status_code == 200:
+            weather_data = weather_response.json()
+            temperature = weather_data['current_weather']['temperature']
+            windspeed = weather_data['current_weather']['windspeed']
+            winddirection = weather_data['current_weather']['winddirection']
+
+            if winddirection < 22.5 or winddirection >= 337.5:
+                wind_dir = "северный"
+            elif winddirection < 67.5:
+                wind_dir = "северо-восточный"
+            elif winddirection < 112.5:
+                wind_dir = "восточный"
+            elif winddirection < 157.5:
+                wind_dir = "юго-восточный"
+            elif winddirection < 202.5:
+                wind_dir = "южный"
+            elif winddirection < 247.5:
+                wind_dir = "юго-западный"
+            elif winddirection < 292.5:
+                wind_dir = "западный"
+            else:
+                wind_dir = "северо-западный"
+
+            weather_info = f"🌤️ Погода в Саратове сейчас: {temperature}°C, ветер {wind_dir}, {windspeed} м/с"
+        else:
+            weather_info = "🌤️ Погода в Саратове: данные временно недоступны"
+    except Exception as e:
+        print(f"Ошибка получения погоды: {e}")
+        weather_info = "🌤️ Погода в Саратове: данные временно недоступны"
 
     best_results = QuizResult.query.filter_by(user_id=current_user.id) \
         .order_by(QuizResult.score.desc()) \
@@ -236,6 +270,7 @@ def result():
                            percentage=round(percentage, 1),
                            rank=rank,
                            fun_fact=fun_fact,
+                           weather=weather_info,
                            best_results=best_results,
                            answers=answers_log)
 

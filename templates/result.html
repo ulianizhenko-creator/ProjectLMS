@@ -22,6 +22,10 @@
                     {{ fun_fact }}
                 </div>
 
+                <div class="alert alert-warning">
+                    {{ weather }}
+                </div>
+
                 {% if best_results %}
                 <div class="mt-4">
                     <h5>🏆 Ваши лучшие результаты:</h5>
@@ -33,7 +37,6 @@
                 </div>
                 {% endif %}
 
-                <!-- Детальный разбор ответов -->
                 {% if answers %}
                 <div class="mt-4">
                     <h5>📋 Детальный разбор ответов:</h5>
